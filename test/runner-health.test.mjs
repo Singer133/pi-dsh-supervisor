@@ -2,19 +2,20 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import process from "node:process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import test from "node:test";
 import { healthSpecFromEnv, runHealthWithRetry } from "../src/dsh-health.mjs";
 import { buildRunnerInvocation, runDshTask, runnerSpecFromEnv, summarizeTaskResult } from "../src/dsh-runner.mjs";
 
 test("buildRunnerInvocation keeps task and paths as separate argv values", () => {
+  const workspace = resolve("fixture", "workspace");
   const invocation = buildRunnerInvocation({
     task: "task with spaces; never shell-evaluate this",
-    workspace: "C:\\fixture\\workspace",
+    workspace,
     runner: { command: "pwsh", args: ["-File", "runner.ps1"] },
   });
   assert.equal(invocation.command, "pwsh");
-  assert.deepEqual(invocation.args.slice(-4), ["-Task", "task with spaces; never shell-evaluate this", "-Workspace", "C:\\fixture\\workspace"]);
+  assert.deepEqual(invocation.args.slice(-4), ["-Task", "task with spaces; never shell-evaluate this", "-Workspace", workspace]);
   assert.equal(invocation.args.includes("&&"), false);
 });
 
