@@ -1,0 +1,31 @@
+{
+  "name": "pi-dsh-supervisor",
+  "version": "0.1.0",
+  "description": "Windows-first Pi bridge for isolated DeepSeek Harness calls, health probes, process cleanup, and review-safe exports.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Singer133/pi-dsh-supervisor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Singer133/pi-dsh-supervisor/issues"
+  },
+  "homepage": "https://github.com/Singer133/pi-dsh-supervisor#readme",
+  "engines": {
+    "node": ">=22.19"
+  },
+  "scripts": {
+    "test": "npm run test:node && npm run test:powershell && npm run test:public && npm run test:package",
+    "test:node": "node --test test/*.test.mjs",
+    "test:powershell": "pwsh -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File test/run-dsh-smoke.ps1",
+    "test:public": "node scripts/public-scan.mjs",
+    "test:package": "node scripts/package-smoke.mjs"
+  },
+  "dependencies": {
+    "typebox": "^1.3.7"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.84.0"
+  }
+}
