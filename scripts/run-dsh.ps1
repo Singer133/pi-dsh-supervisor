@@ -6,6 +6,7 @@ param(
     [string]$DshHome,
     [string]$DshCommand = 'dsh',
     [string]$Patch,
+    [string]$ProfileName = '',
     [ValidateRange(0, 86400)]
     [int]$LockTimeoutSeconds = 60
 )
@@ -36,13 +37,16 @@ $env:DSH_HOME = $resolvedHome
 if ($Patch -and -not (Test-Path -LiteralPath $Patch -PathType Leaf)) {
     throw "Patch does not exist: $Patch"
 }
+if ($ProfileName -and $ProfileName -notmatch '^headless-pi-(?:\d+-)?[0-9a-f]{32}$') {
+    throw "Invalid isolated profile name: $ProfileName"
+}
 
 $lock = $null
 $profile = $null
 $exitCode = 1
 try {
     $lock = New-HeadlessWorkspaceLock -DshHome $resolvedHome -Workspace $resolvedWorkspace -TimeoutSeconds $LockTimeoutSeconds
-    $profile = New-HeadlessIsolatedProfile -DshHome $resolvedHome
+    $profile = New-HeadlessIsolatedProfile -DshHome $resolvedHome -ProfileName $ProfileName
     $command = Get-Command $DshCommand -ErrorAction Stop
     $arguments = @('--profile', $profile.Name)
     if ($Patch) { $arguments += @('--patch', [IO.Path]::GetFullPath($Patch)) }

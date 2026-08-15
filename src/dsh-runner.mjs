@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { rm } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseBoundedInteger, parseStringArray } from "./config.mjs";
@@ -47,6 +49,7 @@ export function buildRunnerInvocation({
   dshCommand,
   patch,
   lockTimeoutSeconds,
+  profileName,
   runner,
 } = {}) {
   if (typeof task !== "string" || task.trim() === "") throw new Error("DSH task must not be empty");
@@ -59,14 +62,25 @@ export function buildRunnerInvocation({
   if (patch !== undefined && (typeof patch !== "string" || !isAbsolute(patch))) {
     throw new Error("DSH patch must be an absolute path when provided");
   }
+  if (profileName !== undefined && (typeof profileName !== "string" || !/^headless-pi-[0-9a-f]{32}$/.test(profileName))) {
+    throw new Error("DSH profileName must match the isolated profile format when provided");
+  }
 
   const spec = runner ?? defaultRunnerSpec();
   const args = [...spec.args, "-Task", task, "-Workspace", workspace];
   if (dshHome) args.push("-DshHome", dshHome);
+  if (profileName) args.push("-ProfileName", profileName);
   if (dshCommand) args.push("-DshCommand", dshCommand);
   if (patch) args.push("-Patch", patch);
   if (lockTimeoutSeconds !== undefined) args.push("-LockTimeoutSeconds", String(lockTimeoutSeconds));
   return { command: spec.command, args };
+}
+
+export async function removeOrphanedHeadlessProfile(dshHome, profileName) {
+  if (typeof dshHome !== "string" || !isAbsolute(dshHome)) return;
+  if (typeof profileName !== "string" || !/^headless-pi-[0-9a-f]{32}$/.test(profileName)) return;
+  const profileDir = join(dshHome, "profiles", profileName);
+  await rm(profileDir, { recursive: true, force: true });
 }
 
 export async function runDshTask(input, options = {}) {
@@ -75,17 +89,25 @@ export async function runDshTask(input, options = {}) {
     "PI_DSH_TIMEOUT_MS",
     { fallback: DEFAULT_TIMEOUT_MS, max: MAX_TIMEOUT_MS },
   );
+  const profileName = `headless-pi-${randomUUID().replaceAll("-", "")}`;
   const invocation = buildRunnerInvocation({
     ...input,
     dshCommand: input.dshCommand ?? process.env.PI_DSH_COMMAND,
+    profileName,
     runner: options.runner,
   });
-  const result = await execProcessTree(invocation.command, invocation.args, {
-    cwd: options.cwd,
-    env: options.env,
-    signal: options.signal,
-    timeout,
-  });
+  const cleanupHome = input.dshHome ?? options.env?.DSH_HOME ?? process.env.DSH_HOME;
+  let result;
+  try {
+    result = await execProcessTree(invocation.command, invocation.args, {
+      cwd: options.cwd,
+      env: options.env,
+      signal: options.signal,
+      timeout,
+    });
+  } finally {
+    await removeOrphanedHeadlessProfile(cleanupHome, profileName).catch(() => {});
+  }
   return { ...result, invocation, diagnostic: boundedDiagnostic(result) };
 }
 

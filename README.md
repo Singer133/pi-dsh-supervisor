@@ -3,6 +3,7 @@
 这是一个**非官方、Windows-first** 的实验性 Pi bridge，用于验证：
 
 - Pi 调用一个受控的 DSH headless 子进程；
+- Pi 通过独立 loopback Web/API session 获取 DSH 结构化调试证据；
 - 同一 workspace 的调用串行化；
 - 每次调用使用独立 headless profile；
 - 超时/取消时清理完整子进程树；
@@ -14,7 +15,8 @@
 ## 重要边界
 
 1. `dsh_call` 是一次性 fresh child 调用，不恢复 Web session。
-2. `dsh_smoke` 只做版本/配置/协议前置检查，不默认调用模型。
+2. `dsh_debug` 是一次性 fresh Web/API session；它不接管用户现有 Web DSH，只返回结构化事件、工具、turn 和 reasoning chunk 指纹。
+3. `dsh_smoke` 只做版本/配置/协议前置检查，不默认调用模型。
 3. smoke 失败可以重启一个新的、无用户任务的 child；普通写任务失败不自动重放，避免重复修改 workspace。
 4. 不提供“重启当前 Web DSH”按钮；只允许管理本插件自己拥有的子进程。
 5. 当前 profile/link 实现依赖 PowerShell 7 与 Windows junction；POSIX adapter 尚未承诺。
@@ -48,10 +50,11 @@ $env:PI_DSH_HEALTH_ARGS = '["-NoLogo","-NoProfile","-Command","& (Get-Command ds
 
 ## 工具面
 
-- `dsh_call`：执行一个 bounded task；workspace 必须是绝对路径。
+- `dsh_call`：执行一个 bounded headless task；workspace 必须是绝对路径。
+- `dsh_debug`：启动隔离 Web/API session，可选择 preset/provider/model/reasoning，观察工具调用、错误、turn 结局和 reasoning chunk 的长度/指纹；可选保存不含原始文本的本机结构化摘要。
 - `dsh_smoke`：执行无模型成本的 `dsh --version` 或用户提供的只读检查参数。
 
-没有 `dsh_restart`：重启策略只存在于 smoke/启动失败的受控路径，避免隐式重放用户工作。
+没有 `dsh_restart`：重启策略只存在于 smoke/启动失败的受控路径，避免隐式重放用户工作。`dsh_debug` 结束时只取消并清理它自己创建的 session/process/profile。
 
 ## 脱敏导出
 

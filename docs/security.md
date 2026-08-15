@@ -6,6 +6,7 @@
 - Pi/DSH JSONL sessions, attachments, logs, SQLite/storage projections;
 - browser profiles, Chrome Local State, receipts, ports, PIDs and machine paths;
 - raw user/assistant messages, prompts, commands, tool output or patch hunks;
+- raw DSH event streams or reasoning text; debug traces must remain structural summaries only;
 - private repository names, remotes, email addresses or internal domains;
 - generated `cordis.yml`, `node_modules`, package caches and backup files.
 
@@ -28,4 +29,7 @@ this prototype does not claim that contract.
 This package executes a configured external command with the caller's OS identity.
 It is a process-management and evidence-shaping helper, not a sandbox. Review the
 DSH command, profile, workspace and environment before enabling it in a trusted Pi
-session.
+session. The Web/API debug route uses a temporary profile and loopback listener; it
+never resumes the user's Web session and its optional trace contains event shape,
+tool names, counts, turn status and reasoning fingerprints, not hidden reasoning
+or tool payloads.

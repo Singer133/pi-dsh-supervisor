@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import process from "node:process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -117,6 +117,37 @@ test("fresh runner invocations do not pretend to restore a DSH session", () => {
   assert.equal(first.args.includes("--session"), false);
   assert.equal(second.args.includes("--session"), false);
   assert.notDeepEqual(first.args, second.args);
+});
+
+test("timeout cleanup removes a profile left behind by a killed runner", async () => {
+  const root = mkdtempSync(join(tmpdir(), "pi-dsh-profile-cleanup-"));
+  const home = join(root, "home");
+  const workspace = join(root, "workspace");
+  const script = [
+    "const fs=require('node:fs');",
+    "const path=require('node:path');",
+    "const args=process.argv.slice(1);",
+    "const home=args[args.indexOf('-DshHome')+1];",
+    "const profile=args[args.indexOf('-ProfileName')+1];",
+    "fs.mkdirSync(path.join(home,'profiles',profile),{recursive:true});",
+    "setTimeout(()=>{},60000);",
+  ].join("");
+  try {
+    const controller = new AbortController();
+    const promise = runDshTask({ task: "hang", workspace, dshHome: home }, {
+      runner: { command: process.execPath, args: ["-e", script, "--"] },
+      signal: controller.signal,
+      timeout: 5000,
+      env: { ...process.env, DSH_HOME: home },
+    });
+    setTimeout(() => controller.abort(), 100);
+    const result = await promise;
+    assert.equal(result.killed, true);
+    const profiles = readdirSync(join(home, "profiles"), { withFileTypes: true }).filter((entry) => entry.isDirectory());
+    assert.deepEqual(profiles, []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("task summaries do not claim killed work succeeded", () => {

@@ -12,11 +12,19 @@ function Write-HeadlessUtf8NoBom {
 function New-HeadlessIsolatedProfile {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$DshHome
+        [string]$DshHome,
+        [string]$ProfileName = ''
     )
 
     $token = [Guid]::NewGuid().ToString('N')
-    $name = "headless-pi-$PID-$token"
+    if ($ProfileName) {
+        if ($ProfileName -notmatch '^headless-pi-(?:\d+-)?[0-9a-f]{32}$') {
+            throw "Invalid isolated profile name: $ProfileName"
+        }
+        $name = $ProfileName
+    } else {
+        $name = "headless-pi-$PID-$token"
+    }
     $profilesRoot = Join-Path $DshHome 'profiles'
     $sourceDir = Join-Path $profilesRoot 'headless'
     $profileDir = Join-Path $profilesRoot $name
@@ -95,7 +103,7 @@ function Remove-HeadlessIsolatedProfile {
     $profileDir = [IO.Path]::GetFullPath($Profile.Directory).TrimEnd([char[]]@('\', '/'))
     $expectedPrefix = "$profilesRoot\"
     if (-not $profileDir.StartsWith($expectedPrefix, [StringComparison]::OrdinalIgnoreCase)) { return }
-    if ($Profile.Name -notmatch '^headless-pi-\d+-[0-9a-f]{32}$') { return }
+    if ($Profile.Name -notmatch '^headless-pi-(?:\d+-)?[0-9a-f]{32}$') { return }
     $nodeModules = Join-Path $profileDir 'node_modules'
     if (Test-Path -LiteralPath $nodeModules) {
         $entry = Get-Item -LiteralPath $nodeModules -Force -ErrorAction SilentlyContinue
