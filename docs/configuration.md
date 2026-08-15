@@ -21,7 +21,30 @@ Do not commit a populated `.env`, DSH profile, session, or credential store.
 
 `dsh_call` also accepts absolute `workspace` and optional absolute `dshHome`
 arguments. Commands and paths are passed as argv values; the implementation does
-not build a shell command line.
+not build a shell command line. `PI_DSH_RUNNER_COMMAND` and
+`PI_DSH_RUNNER_ARGS` are honored by the normal task path for adapter tests.
+
+## Web/API debug session
+
+`dsh_debug` always creates a fresh Web profile under a temporary DSH home. It
+never attaches to or restarts the user's existing Web process. The temporary Web
+process acquires the same workspace lock domain as `dsh_call`, using the original
+`DSH_HOME`, and releases it only after the child exits.
+
+- `agentPreset` is optional; when omitted, DSH selects its own default.
+- `provider` and `model` must be supplied together.
+- `reasoningEffort` requires both `provider` and `model`.
+- `saveTrace` defaults to `false`; when enabled it writes only a structural JSON
+  summary. It does not write raw event frames, prompts, tool results, or hidden
+  reasoning. `includeReasoningFingerprint` is separately opt-in.
+- `lockTimeoutSeconds` bounds how long the Web child waits for the workspace lock.
+- `PI_DSH_COMMAND` is used by both `dsh_call` and `dsh_debug`.
+
+The Web/API listener binds to loopback on a random port without an application
+login. Treat this as a trusted local-process feature: another process running as
+the same user could potentially observe the short-lived listener. The child
+inherits the caller environment so DSH credential resolution continues to work;
+do not enable the extension in an untrusted Pi session.
 
 ## Health probe
 
@@ -45,5 +68,6 @@ or exit code), not raw stderr.
 - startup/health probe: bounded fresh-child retry is allowed;
 - accepted task: one child invocation, no implicit retry or replay;
 - timeout/cancel: terminate the owned process tree;
-- DSH Web process: never claimed, restarted, or resumed by this prototype;
+- user's DSH Web process: never claimed, restarted, or resumed by this prototype;
+- debug Web process: only the fresh child owned by this invocation is cleaned up;
 - DSH session: process-local state is not restored after a fresh child.

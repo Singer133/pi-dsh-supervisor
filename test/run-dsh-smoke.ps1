@@ -30,14 +30,27 @@ exit 0
     $profiles = Get-ChildItem -LiteralPath (Join-Path $dshHome 'profiles') -Directory -Filter 'headless-pi-*' -ErrorAction SilentlyContinue
     if ($profiles) { throw 'isolated profile was not cleaned after normal exit' }
 
+    & pwsh -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot '..\scripts\run-dsh-web.ps1') `
+        -DshHome $dshHome -LockDshHome $dshHome -Workspace $workspace -Port 38881 -DshCommand $fake -LockTimeoutSeconds 0
+    if ($LASTEXITCODE -ne 0) { throw "run-dsh-web wrapper failed: $LASTEXITCODE" }
+    $webArgs = @(Get-Content -LiteralPath $log -Raw | ConvertFrom-Json)
+    if (-not ($webArgs -contains '--profile') -or -not ($webArgs -contains 'web') -or -not ($webArgs -contains '--host') -or -not ($webArgs -contains '--port') -or -not ($webArgs -contains '38881')) {
+        throw 'Web launcher arguments missing'
+    }
+
     . (Join-Path $PSScriptRoot '..\scripts\headless-lock.ps1')
     $heldLock = New-HeadlessWorkspaceLock -DshHome $dshHome -Workspace $workspace -TimeoutSeconds 0
     try {
         $busyOutput = & pwsh -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot '..\scripts\run-dsh.ps1') `
             -Task 'must not run' -Workspace $workspace -DshHome $dshHome -DshCommand $fake -LockTimeoutSeconds 0 2>&1
         $busyExit = $LASTEXITCODE
-        if ($busyExit -eq 0) { throw 'same-workspace lock contention was not rejected' }
-        if (-not (($busyOutput | Out-String) -match 'Workspace is busy')) { throw 'lock contention diagnostic missing' }
+        if ($busyExit -eq 0) { throw 'same-workspace headless lock contention was not rejected' }
+        if (-not (($busyOutput | Out-String) -match 'Workspace is busy')) { throw 'headless lock contention diagnostic missing' }
+        $webBusyOutput = & pwsh -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot '..\scripts\run-dsh-web.ps1') `
+            -DshHome $dshHome -LockDshHome $dshHome -Workspace $workspace -Port 38882 -DshCommand $fake -LockTimeoutSeconds 0 2>&1
+        $webBusyExit = $LASTEXITCODE
+        if ($webBusyExit -eq 0) { throw 'same-workspace Web lock contention was not rejected' }
+        if (-not (($webBusyOutput | Out-String) -match 'Workspace is busy')) { throw 'Web lock contention diagnostic missing' }
     } finally {
         Close-HeadlessWorkspaceLock -Lock $heldLock
     }

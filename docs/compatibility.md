@@ -26,8 +26,9 @@ The public package assumes only a small launcher boundary:
   separate argv values;
 - the Web profile can bind a caller-selected loopback port and expose the DSH
   ApiProxy RPC methods plus its event mux;
-- the debug route can create a fresh session, select a model, prompt it, and read
-  bounded history before shutting down its own profile;
+- the debug route can create a fresh session, optionally select a model, prompt it,
+  and read bounded history before shutting down its own profile; preset omission
+  delegates to the DSH installation's configured default.
 - `DSH_HOME` contains the caller's private profiles and state;
 - the caller accepts the DSH developer-preview compatibility risk.
 
@@ -43,6 +44,7 @@ session files. CLI flags beyond the adapter's tested path are not promised.
 - controlling an already-running user's Web session;
 - automatic replay of a task after a crash;
 - model-quality or Pro 0813 benchmark equivalence;
+- authentication for the short-lived loopback Web/API listener;
 - CI coverage on another Windows, Node, Pi, or PowerShell version.
 
 When DSH changes its CLI or profile layout, update the adapter and this table

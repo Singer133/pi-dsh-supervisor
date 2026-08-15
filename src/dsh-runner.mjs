@@ -94,7 +94,7 @@ export async function runDshTask(input, options = {}) {
     ...input,
     dshCommand: input.dshCommand ?? process.env.PI_DSH_COMMAND,
     profileName,
-    runner: options.runner,
+    runner: options.runner ?? runnerSpecFromEnv(options.env ?? process.env),
   });
   const cleanupHome = input.dshHome ?? options.env?.DSH_HOME ?? process.env.DSH_HOME;
   let result;

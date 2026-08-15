@@ -31,5 +31,10 @@ It is a process-management and evidence-shaping helper, not a sandbox. Review th
 DSH command, profile, workspace and environment before enabling it in a trusted Pi
 session. The Web/API debug route uses a temporary profile and loopback listener; it
 never resumes the user's Web session and its optional trace contains event shape,
-tool names, counts, turn status and reasoning fingerprints, not hidden reasoning
-or tool payloads.
+tool names, counts, turn status and reasoning lengths, not hidden reasoning or
+tool payloads. Fingerprints are opt-in derived metadata: they do not reveal the
+source text directly, but a holder of candidate text may test a hash match. RPC
+failures and startup diagnostics use structural categories only; server response
+bodies and stdout/stderr are not returned in tool errors or traces. The loopback
+listener has no application authentication, so this remains a trusted local
+process feature.

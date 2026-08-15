@@ -24,6 +24,8 @@ const debugParameters = Type.Object({
   timeoutMs: Type.Optional(Type.Integer({ minimum: 1000, maximum: 1800000 })),
   saveTrace: Type.Optional(Type.Boolean({ description: "Write a structural local debug summary; never writes raw messages or reasoning" })),
   traceDir: Type.Optional(Type.String({ description: "Optional absolute directory for the structural debug summary" })),
+  includeReasoningFingerprint: Type.Optional(Type.Boolean({ description: "Opt in to a short derived reasoning fingerprint; chars/lines are always reported" })),
+  lockTimeoutSeconds: Type.Optional(Type.Integer({ minimum: 0, maximum: 86400 })),
 }, { additionalProperties: false });
 
 function assertOptionalAbsolute(value: unknown, label: string): string | undefined {
@@ -32,6 +34,60 @@ function assertOptionalAbsolute(value: unknown, label: string): string | undefin
     throw new Error(`${label} must be an absolute path`);
   }
   return value;
+}
+
+function capArray<T>(items: T[], max: number): { items: T[]; truncated: boolean } {
+  return { items: items.slice(0, max), truncated: items.length > max };
+}
+
+function publicDiagnostics(summary: {
+  selection: unknown;
+  eventTypes: string[];
+  eventTypesTruncated?: boolean;
+  headerTools: string[];
+  toolCalls: unknown[];
+  toolCallCount?: number;
+  toolCallsTruncated?: boolean;
+  toolResultCount: number;
+  toolErrorCount: number;
+  reasoningChunks: unknown[];
+  reasoningChunksTruncated?: boolean;
+  reasoningTotalChars: number;
+  turnEnd: unknown;
+  errors: unknown[];
+}): Record<string, unknown> {
+  const eventTypes = capArray(summary.eventTypes, 64);
+  const headerTools = capArray(summary.headerTools, 96);
+  const toolCalls = capArray(summary.toolCalls, 64);
+  const reasoningChunks = capArray(summary.reasoningChunks, 64);
+  return {
+    selection: summary.selection,
+    eventTypes: eventTypes.items,
+    eventTypesTruncated: Boolean(summary.eventTypesTruncated || eventTypes.truncated),
+    headerTools: headerTools.items,
+    headerToolsTruncated: headerTools.truncated,
+    toolCalls: toolCalls.items,
+    toolCallCount: summary.toolCallCount ?? summary.toolCalls.length,
+    toolCallsTruncated: Boolean(summary.toolCallsTruncated || toolCalls.truncated),
+    toolResultCount: summary.toolResultCount,
+    toolErrorCount: summary.toolErrorCount,
+    reasoningChunks: reasoningChunks.items,
+    reasoningChunksTruncated: Boolean(summary.reasoningChunksTruncated || reasoningChunks.truncated),
+    reasoningTotalChars: summary.reasoningTotalChars,
+    turnEnd: summary.turnEnd,
+    errors: summary.errors.slice(0, 8),
+  };
+}
+
+function debugContent(summary: { assistantText: string }, diagnostics: Record<string, unknown>): string {
+  const body = [
+    "DSH result:",
+    summary.assistantText,
+    "",
+    "DSH structural diagnostics:",
+    JSON.stringify(diagnostics, null, 2),
+  ].join("\n");
+  return body.length <= 48_000 ? body : `${body.slice(0, 47_940)}\n...[diagnostics truncated]`;
 }
 
 export default function register(pi: ExtensionAPI) {
@@ -84,23 +140,25 @@ export default function register(pi: ExtensionAPI) {
         reasoningEffort: params.reasoningEffort,
         timeoutMs: params.timeoutMs,
         saveTrace: params.saveTrace ?? false,
+        includeReasoningFingerprint: params.includeReasoningFingerprint ?? false,
+        lockTimeoutSeconds: params.lockTimeoutSeconds ?? 60,
         traceDir,
         signal,
         onUpdate: (update) => onUpdate?.({ content: [{ type: "text", text: update.text }] }),
       });
       const summary = result.summary;
       if (summary.errors.length > 0 || summary.turnEnd?.kind === "error") {
-        throw new Error(`DSH debug turn failed: ${redact(JSON.stringify(summary.errors.at(-1) ?? summary.turnEnd), 1200)}`);
+        throw new Error(`DSH debug turn failed (${summary.turnEnd?.kind ?? "error"})`);
       }
       if (!summary.assistantText) throw new Error("DSH debug session returned no assistant text");
-      const { assistantText: _assistantText, ...details } = summary;
+      const diagnostics = publicDiagnostics(summary);
       return {
-        content: [{ type: "text", text: summary.assistantText }],
+        content: [{ type: "text", text: debugContent(summary, diagnostics) }],
         details: {
           route: "dsh-web-debug",
           sessionId: result.sessionId,
           elapsedMs: result.elapsedMs,
-          ...details,
+          ...diagnostics,
           trace: result.trace,
         },
       };
@@ -112,8 +170,8 @@ export default function register(pi: ExtensionAPI) {
     label: "DSH Smoke",
     description: "Run a no-model DSH startup/configuration probe. It may retry with a fresh child; it never replays a user task or restarts Web DSH.",
     parameters: smokeParameters,
-    async execute() {
-      const result = await runHealthWithRetry();
+    async execute(_toolCallId, _params, signal) {
+      const result = await runHealthWithRetry({ signal });
       if (!result.ok) throw new Error(`DSH smoke failed after ${result.attempts} attempt(s): ${result.diagnostic}`);
       return {
         content: [{ type: "text", text: `DSH smoke passed (${result.attempts} fresh process probe${result.attempts === 1 ? "" : "s"}).` }],

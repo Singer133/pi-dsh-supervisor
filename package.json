@@ -1,7 +1,26 @@
 {
   "name": "pi-dsh-supervisor",
   "version": "0.1.0",
-  "description": "Windows-first Pi bridge for isolated DeepSeek Harness calls, health probes, process cleanup, and review-safe exports.",
+  "description": "Windows-first Pi package for isolated DeepSeek Harness calls, session diagnostics, health probes, process cleanup, and review-safe exports.",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "deepseek",
+    "dsh",
+    "coding-agent",
+    "windows"
+  ],
+  "pi": {
+    "extensions": ["./src/pi-dsh.ts"]
+  },
+  "files": [
+    "src/",
+    "scripts/",
+    "docs/",
+    "test/",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -22,10 +41,8 @@
     "test:public": "node scripts/public-scan.mjs",
     "test:package": "node scripts/package-smoke.mjs"
   },
-  "dependencies": {
-    "typebox": "^1.3.7"
-  },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": ">=0.84.0"
+    "@earendil-works/pi-coding-agent": ">=0.84.0",
+    "typebox": "*"
   }
 }

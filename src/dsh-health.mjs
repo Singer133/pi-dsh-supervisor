@@ -65,11 +65,28 @@ export async function runHealthProbe({
 export async function runHealthWithRetry(input, { maxAttempts = 2, delayMs = 250 } = {}) {
   const attempts = parseBoundedInteger(maxAttempts, "maxAttempts", { fallback: 2, max: 3 });
   const delay = parseBoundedInteger(delayMs, "delayMs", { fallback: 250, min: 0, max: 30_000 });
+  const signal = input?.signal;
   let last;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    if (signal?.aborted) throw new Error("DSH health check cancelled");
     last = await runHealthProbe(input);
     if (last.ok || attempt === attempts) return { ...last, attempts: attempt };
-    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+    if (delay > 0) {
+      await new Promise((resolve, reject) => {
+        let timer;
+        const onAbort = () => {
+          clearTimeout(timer);
+          signal?.removeEventListener("abort", onAbort);
+          reject(new Error("DSH health check cancelled"));
+        };
+        timer = setTimeout(() => {
+          signal?.removeEventListener("abort", onAbort);
+          resolve();
+        }, delay);
+        signal?.addEventListener("abort", onAbort, { once: true });
+        if (signal?.aborted) onAbort();
+      });
+    }
   }
   return { ...last, attempts };
 }

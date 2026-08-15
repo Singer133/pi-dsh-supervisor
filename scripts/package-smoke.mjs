@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,6 +30,10 @@ try {
   const extracted = join(temp, "package");
   run("tar", ["-xzf", metadata.filename, "-C", "."], temp);
   const packageRoot = join(temp, "package");
+  const packageJson = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
+  if (!packageJson.keywords?.includes("pi-package")) throw new Error("package manifest is missing the pi-package keyword");
+  if (!packageJson.pi?.extensions?.includes("./src/pi-dsh.ts")) throw new Error("package manifest is missing the Pi extension entry");
+  if (!existsSync(join(packageRoot, "src", "pi-dsh.ts"))) throw new Error("packed Pi extension is missing");
   run(npm.command, [...npm.args, "run", "test:node"], packageRoot);
   run(npm.command, [...npm.args, "run", "test:public"], packageRoot);
   if (process.platform === "win32") run(npm.command, [...npm.args, "run", "test:powershell"], packageRoot);

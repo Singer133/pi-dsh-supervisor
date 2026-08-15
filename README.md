@@ -15,24 +15,29 @@
 ## 重要边界
 
 1. `dsh_call` 是一次性 fresh child 调用，不恢复 Web session。
-2. `dsh_debug` 是一次性 fresh Web/API session；它不接管用户现有 Web DSH，只返回结构化事件、工具、turn 和 reasoning chunk 指纹。
+2. `dsh_debug` 是一次性 fresh Web/API session；它不接管用户现有 Web DSH，只返回结构化事件、工具、turn 和 reasoning chunk 长度；fingerprint 需要显式 opt-in。
 3. `dsh_smoke` 只做版本/配置/协议前置检查，不默认调用模型。
-3. smoke 失败可以重启一个新的、无用户任务的 child；普通写任务失败不自动重放，避免重复修改 workspace。
-4. 不提供“重启当前 Web DSH”按钮；只允许管理本插件自己拥有的子进程。
-5. 当前 profile/link 实现依赖 PowerShell 7 与 Windows junction；POSIX adapter 尚未承诺。
-6. DSH developer preview 的 CLI/配置变化由 adapter 层隔离，不能把本项目当作稳定 API 保证。
+4. smoke 失败可以重启一个新的、无用户任务的 child；普通写任务失败不自动重放，避免重复修改 workspace。
+5. 不提供“重启当前 Web DSH”按钮；只允许管理本插件自己拥有的子进程。
+6. 当前 profile/link 实现依赖 PowerShell 7 与 Windows junction；POSIX adapter 尚未承诺。
+7. DSH developer preview 的 CLI/配置变化由 adapter 层隔离，不能把本项目当作稳定 API 保证。
 
 ## 本地运行
 
 配置边界和已验证版本见 [`docs/configuration.md`](docs/configuration.md) 与 [`docs/compatibility.md`](docs/compatibility.md)。
 
 ```powershell
-cd projects/agent-infra/prototypes/pi-dsh-supervisor
+git clone https://github.com/Singer133/pi-dsh-supervisor.git
+cd pi-dsh-supervisor
+npm install
 npm test
 # also runs an isolated npm-pack extraction smoke
+
+# Register the package in Pi using its package manifest:
+pi install .
 ```
 
-加载 Pi extension（开发态）：
+开发态也可以直接加载 extension：
 
 ```powershell
 pi -e ./src/pi-dsh.ts
@@ -41,6 +46,7 @@ pi -e ./src/pi-dsh.ts
 默认要求当前环境已配置 `DSH_HOME`，并且 `dsh` 在 PATH 中。也可以通过环境变量覆盖：
 
 ```powershell
+# DSH executable used by dsh_call and dsh_debug:
 $env:PI_DSH_COMMAND = "dsh"
 $env:PI_DSH_TIMEOUT_MS = "600000"
 # Optional read-only smoke command override:
@@ -51,10 +57,10 @@ $env:PI_DSH_HEALTH_ARGS = '["-NoLogo","-NoProfile","-Command","& (Get-Command ds
 ## 工具面
 
 - `dsh_call`：执行一个 bounded headless task；workspace 必须是绝对路径。
-- `dsh_debug`：启动隔离 Web/API session，可选择 preset/provider/model/reasoning，观察工具调用、错误、turn 结局和 reasoning chunk 的长度/指纹；可选保存不含原始文本的本机结构化摘要。
+- `dsh_debug`：启动隔离 Web/API session，可选择 preset/provider/model/reasoning，观察工具调用、错误、turn 结局和 reasoning chunk 的长度；结构化诊断会同时放入 Pi 可见的 tool content 和 renderer details。reasoning fingerprint 必须显式 opt-in；可选保存不含原始文本的本机结构化摘要。
 - `dsh_smoke`：执行无模型成本的 `dsh --version` 或用户提供的只读检查参数。
 
-没有 `dsh_restart`：重启策略只存在于 smoke/启动失败的受控路径，避免隐式重放用户工作。`dsh_debug` 结束时只取消并清理它自己创建的 session/process/profile。
+没有 `dsh_restart`：重启策略只存在于 smoke/启动失败的受控路径，避免隐式重放用户工作。`dsh_call` 与 `dsh_debug` 共享原始 DSH_HOME 下的 workspace lock；`dsh_debug` 结束时只取消并清理它自己创建的 session/process/profile。
 
 ## 脱敏导出
 
